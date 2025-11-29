@@ -2,30 +2,44 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
 from openai import OpenAI
-import datetime
 import os
 import json
+import datetime
 
-# -----------------------------
-# 🔥 SAFE FIREBASE INITIALIZATION
-# -----------------------------
+# -----------------------------------
+# 🔥 Load Environment Variables
+# -----------------------------------
+firebase_json_str = os.environ.get("FIREBASE_KEY")
+firebase_db_url = os.environ.get("FIREBASE_DB_URL")
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+
+if not firebase_json_str:
+    st.error("❌ ERROR: FIREBASE_KEY not found in environment variables.")
+if not firebase_db_url:
+    st.error("❌ ERROR: FIREBASE_DB_URL not found in environment variables.")
+if not openai_api_key:
+    st.error("❌ ERROR: OPENAI_API_KEY not found in environment variables.")
+
+# -----------------------------------
+# 🔥 Initialize Firebase (Safe)
+# -----------------------------------
 if not firebase_admin._apps:
-    # Get Firebase JSON from environment variable
-    firebase_json_str = os.getenv("FIREBASE_KEY_JSON")  # store the entire JSON as a string
-    cred_dict = json.loads(firebase_json_str)
-    cred = credentials.Certificate(cred_dict)
-    
-    firebase_admin.initialize_app(cred, {
-        "databaseURL": os.getenv("FIREBASE_DB_URL")  # store your DB URL as env var
-    })
+    try:
+        cred_dict = json.loads(firebase_json_str)
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred, {
+            "databaseURL": firebase_db_url
+        })
+        content_ref = db.reference("/social_media_posts")
+    except Exception as e:
+        st.error(f"🔥 Firebase initialization failed: {e}")
+else:
+    content_ref = db.reference("/social_media_posts")
 
-# Firebase reference
-content_ref = db.reference("/social_media_posts")
-
-# -----------------------------
-# 🔥 OPENAI MODEL SETUP
-# -----------------------------
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # store OpenAI API key as env var
+# -----------------------------------
+# 🔥 OpenAI Client Setup
+# -----------------------------------
+client = OpenAI(api_key=openai_api_key)
 
 def generate_social_media_content(topic, platform, tone):
     prompt = f"""
@@ -49,9 +63,9 @@ def generate_social_media_content(topic, platform, tone):
 
     return response.choices[0].message.content.strip()
 
-# -----------------------------
-# 🔥 SAVE DATA TO FIREBASE
-# -----------------------------
+# -----------------------------------
+# 🔥 Save to Firebase
+# -----------------------------------
 def save_to_firebase(topic, platform, tone, output):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     content_ref.push({
@@ -62,9 +76,9 @@ def save_to_firebase(topic, platform, tone, output):
         "timestamp": now
     })
 
-# -----------------------------
-# 🔥 STREAMLIT UI
-# -----------------------------
+# -----------------------------------
+# 🔥 Streamlit UI
+# -----------------------------------
 st.title("✨ AI Social Media Agent")
 st.write("Generate high-quality social media posts for any platform.")
 
@@ -78,7 +92,7 @@ if st.button("Generate Post"):
     else:
         with st.spinner("Generating AI content..."):
             output = generate_social_media_content(topic, platform, tone)
-        
+
         st.success("Content Generated Successfully!")
         st.write("### ✨ Your AI Generated Post:")
         st.write(output)
@@ -87,20 +101,22 @@ if st.button("Generate Post"):
         save_to_firebase(topic, platform, tone, output)
         st.info("Saved to Firebase Database!")
 
-# -----------------------------
-# 🔥 SHOW SAVED CONTENT
-# -----------------------------
+# -----------------------------------
+# 🔥 View Saved Posts
+# -----------------------------------
 if st.checkbox("View Past Generated Posts"):
-    data = content_ref.get()
-
-    if data:
-        st.subheader("🗂 Past Posts from Database")
-        for key, value in data.items():
-            st.write(f"**Topic:** {value['topic']}")
-            st.write(f"**Platform:** {value['platform']}")
-            st.write(f"**Tone:** {value['tone']}")
-            st.write(f"**Content:** {value['content']}")
-            st.write(f"**Time:** {value['timestamp']}")
-            st.write("---")
-    else:
-        st.info("No previous posts found.")
+    try:
+        data = content_ref.get()
+        if data:
+            st.subheader("🗂 Past Posts from Database")
+            for key, value in data.items():
+                st.write(f"**Topic:** {value['topic']}")
+                st.write(f"**Platform:** {value['platform']}")
+                st.write(f"**Tone:** {value['tone']}")
+                st.write(f"**Content:** {value['content']}")
+                st.write(f"**Time:** {value['timestamp']}")
+                st.write("---")
+        else:
+            st.info("No previous posts found.")
+    except Exception as e:
+        st.error(f"🔥 Error reading from Firebase: {e}")
