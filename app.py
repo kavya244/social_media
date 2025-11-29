@@ -11,12 +11,12 @@ import json
 # -----------------------------
 if not firebase_admin._apps:
     # Get Firebase JSON from environment variable
-    firebase_json_str = ("FIREBASE_KEY_JSON")  # store the entire JSON as a string
+    firebase_json_str = os.getenv("FIREBASE_KEY_JSON")  # store the entire JSON as a string
     cred_dict = json.loads(firebase_json_str)
     cred = credentials.Certificate(cred_dict)
     
     firebase_admin.initialize_app(cred, {
-        "databaseURL": ("FIREBASE_DB_URL")  # store your DB URL as env var
+        "databaseURL": os.getenv("FIREBASE_DB_URL")  # store your DB URL as env var
     })
 
 # Firebase reference
@@ -25,7 +25,7 @@ content_ref = db.reference("/social_media_posts")
 # -----------------------------
 # 🔥 OPENAI MODEL SETUP
 # -----------------------------
-  # store OpenAI API key as env var
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # store OpenAI API key as env var
 
 def generate_social_media_content(topic, platform, tone):
     prompt = f"""
